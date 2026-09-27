@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SPECTRASENSE — Who's Talking Over Whom?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0B0908; --ink:#F4EDE0; --body:#CFC5B4; --mut:#96897A; --dim:#6A604F;
+  --line:#2A241B; --amb:#FFB03B; --hot:#FF5A1F; --panel:rgba(12,10,7,.72);
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:'Archivo',sans-serif;overflow:hidden;height:100vh;height:100dvh;-webkit-font-smoothing:antialiased}
+::selection{background:var(--amb);color:#171106}
+:focus-visible{outline:1px solid var(--amb);outline-offset:3px}
+button{font-family:inherit}
+
+/* ---------- layers ---------- */
+#wf{position:fixed;inset:0;z-index:0;transition:opacity .9s ease}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 3px)}
+.faxis{position:fixed;left:0;right:0;bottom:58px;z-index:3;display:flex;justify-content:space-between;
+  padding:0 26px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--dim);pointer-events:none}
+.progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:30;background:rgba(255,255,255,.05)}
+.progress i{display:block;height:100%;width:10%;background:var(--amb);transition:width .5s cubic-bezier(.2,.7,.2,1)}
+.sweep{position:fixed;top:0;bottom:0;left:0;width:1px;background:var(--amb);opacity:0;z-index:40;pointer-events:none}
+.sweep.run{animation:sweepA .55s cubic-bezier(.3,.6,.3,1) forwards}
+@keyframes sweepA{0%{opacity:.8;transform:translateX(0)}100%{opacity:0;transform:translateX(100vw)}}
+
+/* ---------- HUD ---------- */
+.hud{position:fixed;left:0;right:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
+  padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:var(--mut)}
+.hud-top{top:0}
+.hud-bot{bottom:0}
+.brand{display:flex;align-items:center;gap:10px;color:var(--ink)}
+.brand svg{color:var(--amb)}
+.brand span{color:var(--mut)}
+.hud b{color:var(--amb);font-weight:500}
+.hint{position:absolute;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:.2em}
+.nav{display:flex;gap:8px}
+.nav button{width:38px;height:38px;display:grid;place-items:center;background:none;border:1px solid var(--line);
+  color:var(--mut);cursor:pointer;transition:.2s}
+.nav button:hover{border-color:var(--amb);color:var(--amb)}
+.counter{display:flex;align-items:baseline;gap:10px}
+.counter #cnum{color:var(--ink);font-size:15px;font-weight:600}
+.counter #ctitle{font-size:10px;letter-spacing:.2em;color:var(--dim)}
+
+/* ---------- slides ---------- */
+/* FIX: main must own the viewport, otherwise the absolutely-positioned
+   slides collapse to zero height and nothing is visible */
+main{position:fixed;inset:0;z-index:10}
+.slide{position:absolute;inset:0;overflow-y:auto;opacity:0;visibility:hidden;transform:translateY(26px);
+  transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1),visibility 0s .5s}
+.slide.active{opacity:1;visibility:visible;transform:none;
+  transition:opacity .6s ease .12s,transform .6s cubic-bezier(.2,.7,.2,1) .12s}
+.wrap{min-height:100%;max-width:1280px;margin:0 auto;display:flex;flex-direction:column;justify-content:center;
+  padding:96px 5vw 110px}
+.rev{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.2,1);
+  transition-delay:calc(var(--d,0)*1s + .22s)}
+.active .rev{opacity:1;transform:none}
+
+h1,h2{text-transform:uppercase;font-weight:800;font-stretch:116%;letter-spacing:-.015em;line-height:.95;
+  text-shadow:0 2px 18px rgba(8,6,4,.65)}
+h1{font-size:clamp(50px,8.6vw,122px)}
+h2{font-size:clamp(32px,4.4vw,60px)}
+h1 em,h2 em{font-style:normal;color:var(--amb)}
+.kick{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.24em;color:var(--amb)}
+.lede{max-width:58ch;color:var(--body);font-size:clamp(15px,1.35vw,18px);line-height:1.68;margin-top:22px;
+  text-shadow:0 1px 10px rgba(8,6,4,.6)}
+.head{margin-bottom:36px}
+.head .kick{margin-bottom:16px}
+code{font-family:'IBM Plex Mono',monospace;font-size:.9em;color:var(--amb);
+  background:rgba(255,176,59,.07);border:1px solid rgba(255,176,59,.18);padding:1px 6px}
+.grid2{display:grid;grid-template-columns:1.05fr .95fr;gap:4vw;align-items:center}
+.g-start{align-items:start}
+
+/* ---------- slide 1 : title ---------- */
+.codename{display:inline-flex;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  letter-spacing:.2em;color:var(--mut);border:1px solid var(--line);padding:10px 16px;background:var(--panel)}
+.codename svg{color:var(--amb)}
+.codename .sep{width:1px;height:14px;background:var(--line)}
+.s-title h1{margin-top:34px}
+.tmeta{display:flex;gap:34px;flex-wrap:wrap;margin-top:48px}
+.tmeta div{border-left:1px solid var(--line);padding-left:16px;max-width:250px}
+.tmeta b{display:block;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:10px;
+  letter-spacing:.22em;color:var(--amb);margin-bottom:8px}
+.tmeta span{font-size:12.5px;line-height:1.55;color:var(--body)}
+.press{margin-top:56px;display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;
+  font-size:11px;letter-spacing:.22em;color:var(--mut)}
+.press svg{color:var(--amb)}
+.blink{animation:blink 1.2s steps(2) infinite}
+@keyframes blink{50%{opacity:.15}}
+
+/* ---------- slide 2 : problem ledger ---------- */
+.ledger{margin-top:48px;border-top:1px solid var(--line)}
+.lrow{display:grid;grid-template-columns:300px 1fr;gap:34px;padding:30px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.fig b{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:clamp(38px,4.4vw,62px);
+  letter-spacing:-.02em;text-shadow:0 2px 14px rgba(8,6,4,.6)}
+.fig small{font-family:'IBM Plex Mono',monospace;font-size:15px;color:var(--amb);margin-left:10px;letter-spacing:.1em}
+.ldesc h3{font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:12px;letter-spacing:.2em;color:var(--amb);margin-bottom:9px}
+.ldesc p{color:var(--body);max-width:64ch;line-height:1.62;font-size:14.5px;text-shadow:0 1px 8px rgba(8,6,4,.55)}
+.closer{margin-top:26px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;color:var(--dim)}
+
+/* ---------- pipeline steps ---------- */
+.pipe{display:flex;flex-direction:column}
+.pstep{display:grid;grid-template-columns:52px 1fr;gap:18px;padding:20px 0;border-top:1px solid var(--line)}
+.pstep:last-child{border-bottom:1px solid var(--line)}
+.pstep>b{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--amb);font-size:13px;padding-top:2px}
+.pstep h4{font-size:13px;font-weight:700;letter-spacing:.16em}
+.pstep p{margin-top:6px;font-size:13.5px;line-height:1.55;color:var(--mut)}
+.mini-panel{margin-top:30px;border:1px solid var(--line);background:var(--panel);padding:14px}
+.mini-panel canvas{width:100%;height:110px;display:block}
+.mini-cap{display:flex;justify-content:space-between;margin-top:10px;font-family:'IBM Plex Mono',monospace;
+  font-size:9.5px;letter-spacing:.16em;color:var(--dim)}
+
+/* ---------- slide 4 : demo ---------- */
+.panelbox{background:rgba(11,9,7,.74);backdrop-filter:blur(10px);border:1px solid #262019;padding:28px 30px}
+.s-demo .grid2{grid-template-columns:minmax(0,1fr) 400px}
+.sigs{margin-top:32px;border-top:1px solid var(--line)}
+.sig{display:grid;grid-template-columns:30px 1fr auto 12px;gap:14px;align-items:center;width:100%;text-align:left;
+  padding:15px 4px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);cursor:pointer;transition:.2s}
+.sig:hover{background:rgba(255,176,59,.04)}
+.sig .k{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);border:1px solid var(--line);
+  width:24px;height:24px;display:grid;place-items:center}
+.sig .nm{font-weight:700;font-size:14.5px;letter-spacing:.05em;transition:.2s}
+.sig .mt{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--mut);letter-spacing:.06em;text-align:right}
+.sig .led{width:8px;height:8px;border-radius:50%;background:#3a3428;border:1px solid #57503f;transition:.2s}
+.sig.on .led{background:var(--amb);border-color:var(--amb);box-shadow:0 0 9px rgba(255,176,59,.55)}
+.sig.on .nm{color:var(--amb)}
+.foot-hint{margin-top:20px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--dim)}
+.foot-hint b{color:var(--amb);font-weight:500}
+
+.readout{justify-self:end;width:min(420px,100%);border:1px solid #2e2820;background:rgba(12,10,7,.8);
+  backdrop-filter:blur(10px);padding:24px 26px 18px;font-family:'IBM Plex Mono',monospace}
+.r-head{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.2em;color:var(--mut);
+  padding-bottom:14px;border-bottom:1px solid var(--line)}
+#rMode{color:var(--amb)}
+.r-label{margin-top:18px;font-size:10px;letter-spacing:.22em;color:var(--mut)}
+.r-pred{margin-top:9px;font-size:16.5px;font-weight:600;letter-spacing:.02em;min-height:2.5em;line-height:1.35;color:var(--ink)}
+.r-conf{display:flex;align-items:center;gap:12px;margin-top:4px}
+.bar{flex:1;height:6px;background:#241f17;position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;left:0;bottom:0;width:50%;background:var(--amb);transition:width .45s cubic-bezier(.2,.7,.2,1)}
+.r-conf b{font-size:13px;color:var(--amb);min-width:54px;text-align:right;font-weight:500}
+.r-classes{margin-top:22px;display:flex;flex-direction:column;gap:10px}
+.rc{display:grid;grid-template-columns:64px 1fr 40px;gap:10px;align-items:center;font-size:10px;letter-spacing:.12em;color:var(--mut)}
+.rc .bar{height:4px}
+.rc .bar i{background:#D89A45}
+.rc b{color:var(--body);font-size:10px;text-align:right;font-weight:400}
+.r-co{margin-top:18px;display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:.16em;color:var(--mut);
+  border:1px dashed #3a3226;padding:10px 12px;transition:.3s}
+.r-co i{width:8px;height:8px;border-radius:50%;background:#3a3428;transition:.3s}
+.r-co b{margin-left:auto;font-weight:400}
+.r-co.on{border-color:rgba(255,90,31,.55);color:#FF8A5B}
+.r-co.on i{background:var(--hot)}
+.r-foot{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:10px;letter-spacing:.08em;color:var(--mut)}
+
+/* ---------- slide 5 : pairs ---------- */
+.pairs{margin-top:38px;border-top:1px solid var(--line)}
+.prow{display:grid;grid-template-columns:44px 1.15fr 150px 230px;gap:22px;align-items:center;padding:17px 10px;
+  border-bottom:1px solid var(--line);border-left:2px solid transparent;transition:.25s}
+.prow.on{border-left-color:var(--amb);background:rgba(255,176,59,.035)}
+.pn{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mut);transition:.25s}
+.prow.on .pn{color:var(--amb)}
+.pt h4{font-size:clamp(16px,1.5vw,19px);font-weight:700}
+.pt p{font-size:13px;color:var(--mut);margin-top:4px;line-height:1.5;max-width:52ch}
+.pb{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--mut);text-align:right}
+.pcv{width:100%;height:64px;display:block;border:1px solid #262019;background:#0d0a08}
+
+/* ---------- phase 1 spec panel ---------- */
+.spec{border:1px solid var(--line);background:var(--panel);padding:24px;font-family:'IBM Plex Mono',monospace}
+.spec h5{font-size:10px;letter-spacing:.24em;color:var(--mut);font-weight:500;margin-bottom:12px}
+.srow{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-top:1px solid #221d15;font-size:11px;letter-spacing:.04em}
+.srow b{color:var(--amb);font-weight:500;white-space:nowrap}
+.srow span{color:var(--body);text-align:right}
+.spec canvas{width:100%;height:90px;display:block;border:1px solid #262019;margin-top:16px;background:#0d0a08}
+.spec .mini-cap{margin-top:9px}
+
+/* ---------- phase 2 : confusion matrix ---------- */
+.cm{display:grid;grid-template-columns:64px repeat(4,1fr);gap:4px;font-family:'IBM Plex Mono',monospace;font-size:12.5px}
+.cm b{font-size:9.5px;letter-spacing:.1em;color:var(--mut);font-weight:500;display:grid;place-items:center;padding:6px 0}
+.cm i{display:grid;place-items:center;aspect-ratio:1.85;font-style:normal;color:var(--ink);background:#191510;
+  opacity:0;transform:scale(.7);transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1);transition-delay:calc(var(--d)*1s)}
+.cm.play i{opacity:1;transform:none}
+.cm i.d{background:rgba(255,176,59,var(--a,.85));color:#171106;font-weight:600}
+.cm i.x{background:rgba(255,90,31,.13);color:#E8A48F}
+.cm i.z{background:#161209;color:#57503f}
+.cm-foot{margin-top:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--mut);line-height:1.7}
+.cm-foot b{color:var(--amb);font-size:20px;font-weight:600;letter-spacing:0;margin-right:10px}
+.cm-foot span{display:block;color:var(--dim);font-size:10px}
+
+/* ---------- phase 3 : OTA chain ---------- */
+.chain{display:flex;align-items:stretch;margin-top:6px}
+.cbox{border:1px solid var(--line);padding:15px 17px;min-width:118px;display:flex;flex-direction:column;
+  justify-content:center;gap:5px;background:var(--panel)}
+.cbox b{font-size:12.5px;letter-spacing:.1em;font-weight:700}
+.cbox span{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--mut)}
+.cbox.hot{border-color:rgba(255,176,59,.55)}
+.cbox.hot b{color:var(--amb)}
+.carr{align-self:center;color:var(--dim);padding:0 5px;flex:none}
+.air{flex:1;position:relative;border-top:1px dashed #3a3226;border-bottom:1px dashed #3a3226;margin:16px 4px;min-width:90px}
+.air span{position:absolute;top:-21px;left:50%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;
+  font-size:9px;letter-spacing:.2em;color:var(--dim);white-space:nowrap}
+.air i{position:absolute;top:50%;left:0;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--amb);
+  animation:flyH 1.7s linear infinite}
+@keyframes flyH{0%{left:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{left:calc(100% - 6px);opacity:0}}
+@keyframes flyV{0%{top:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:calc(100% - 6px);opacity:0}}
+.p3grid{margin-top:42px}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--body);
+  border:1px solid var(--line);padding:8px 12px;background:rgba(12,10,7,.5)}
+.chip.hot{color:var(--amb);border-color:rgba(255,176,59,.4)}
+.sub{margin-top:16px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;color:var(--dim);line-height:1.8}
+.code{font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.8;color:#C9BFAC;
+  background:rgba(10,8,6,.78);border:1px solid var(--line);padding:20px 22px;overflow:auto}
+.code .c{color:#6f6555}.code .k{color:var(--amb)}
+
+/* ---------- slide 9 : roadmap ---------- */
+.road{margin-top:6px;border-top:1px solid var(--line)}
+.rrow{display:grid;grid-template-columns:60px 1fr;gap:24px;padding:19px 10px;border-bottom:1px solid var(--line);
+  border-left:2px solid transparent;transition:.25s}
+.rrow:hover{border-left-color:var(--amb);background:rgba(255,176,59,.035);transform:translateX(4px)}
+.rrow>b{font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:13px;color:var(--mut);padding-top:2px;transition:.25s}
+.rrow:hover>b{color:var(--amb)}
+.rrow h4{font-size:13.5px;font-weight:700;letter-spacing:.15em}
+.rrow p{font-size:13.5px;color:var(--mut);margin-top:4px;max-width:74ch;line-height:1.55}
+
+/* ---------- slide 10 : closing ---------- */
+.chips-lg{margin-top:44px}
+.thanks{margin-top:52px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;
+  flex-wrap:wrap;gap:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--mut)}
+.thanks b{color:var(--amb);font-weight:500}
+
+/* ---------- responsive ---------- */
+@media(max-width:980px){
+  .grid2{grid-template-columns:1fr;gap:34px}
+  .s-demo .grid2{grid-template-columns:1fr}
+  .readout{justify-self:stretch}
+  .prow{grid-template-columns:28px 1fr}
+  .pb{display:none}
+  .pcv{grid-column:1/-1;height:56px}
+  .lrow{grid-template-columns:1fr;gap:10px}
+  .chain{flex-direction:column;align-items:stretch}
+  .carr{transform:rotate(90deg);align-self:center;padding:2px 0}
+  .air{min-width:0;height:46px;margin:8px 0}
+  .air i{left:50%;margin-left:-3px;margin-top:0;top:0;animation-name:flyV}
+}
+@media(max-width:700px){
+  .faxis,.hint{display:none}
+  .hud{padding:14px 16px}
+  .brand span{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .air i,.blink{animation:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="wf"></canvas>
+<div class="grain"></div>
+<div class="faxis"><span>2.400</span><span>2.425</span><span>2.450</span><span>2.475</span><span>2.500 GHz</span></div>
+<div class="progress"><i id="pbar"></i></div>
+<div class="sweep" id="sweep"></div>
+
+<header class="hud hud-top">
+  <div class="brand">
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="1.6" fill="currentColor" stroke="none"/><path d="M4.8 2.8a4.5 4.5 0 0 0 0 4.4M11.2 2.8a4.5 4.5 0 0 1 0 4.4M2.6 1.2a7 7 0 0 0 0 7.6M13.4 1.2a7 7 0 0 1 0 7.6M8 6.6V14M5.5 14h5"/></svg>
+    SPECTRASENSE&nbsp;<span>RF-INTERFERENCE CLASSIFIER</span>
+  </div>
+  <div>CF 2.450 GHz · SPAN 100 MHz · <b>SIM</b></div>
+</header>
+
+<main id="deck">
+
+  <!-- 01 · TITLE -->
+  <section class="slide s-title" data-gain=".78" data-title="TITLE">
+    <div class="wrap">
+      <div class="codename rev" style="--d:.05">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="1.6" fill="currentColor" stroke="none"/><path d="M4.8 2.8a4.5 4.5 0 0 0 0 4.4M11.2 2.8a4.5 4.5 0 0 1 0 4.4M8 6.6V14M5.5 14h5"/></svg>
+        <span>SPECTRASENSE</span><i class="sep"></i><span>DEEP LEARNING · SDR · v0.1</span>
+      </div>
+      <h1 class="rev" style="--d:.15">WHO'S TALKING<br><em>OVER WHOM?</em></h1>
+      <p class="lede rev" style="--d:.3">AI already reads MRIs, finds new drugs, and combs imagery for human traffickers. This project points the same deep-learning toolkit at a resource nobody can see: the radio spectrum — where 5G, LTE, WiFi, Bluetooth and ZigBee collide every single day.</p>
+      <div class="tmeta rev" style="--d:.45">
+        <div><b>BRIEF</b><span>Classify interfering wireless signals with a DNN; verify over the air with software-defined radios.</span></div>
+        <div><b>STACK</b><span>MATLAB · Deep Learning Toolbox · Communications Toolbox · SDR hardware</span></div>
+        <div><b>STATUS</b><span>Proposal — 3 phases, synthetic data to over-the-air proof</span></div>
+      </div>
+      <div class="press rev" style="--d:.6">
+        <svg class="blink" viewBox="0 0 12 12" width="10" height="10" fill="currentColor"><path d="M2 1.5v9L10.5 6z"/></svg>
+        PRESS → TO BEGIN
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 · PROBLEM -->
+  <section class="slide" data-gain=".5" data-title="THE PROBLEM">
+    <div class="wrap">
+      <div class="head">
+        <p class="kick rev">02 — THE PROBLEM</p>
+        <h2 class="rev" style="--d:.1">THE AIR IS RUNNING<br>OUT OF <em>ROOM</em>.</h2>
+      </div>
+      <div class="ledger">
+        <div class="lrow rev" style="--d:.2">
+          <div class="fig"><b data-count="30" data-suffix=" B+">0 B+</b></div>
+          <div class="ldesc"><h3>CONNECTED DEVICES BY 2030</h3><p>Cellular, WiFi, Bluetooth, ZigBee, UWB, SatCom, radar, GPS, IoT — every year, millions of new transmitters compete for the same invisible real estate.</p></div>
+        </div>
+        <div class="lrow rev" style="--d:.3">
+          <div class="fig"><b data-count="300" data-suffix=" GHz">0 GHz</b></div>
+          <div class="ldesc"><h3>TOP OF THE USABLE SPECTRUM</h3><p>From 3 kHz to 300 GHz — every hertz is already allocated, licensed or contested. New spectrum is not being created. Ever.</p></div>
+        </div>
+        <div class="lrow rev" style="--d:.4">
+          <div class="fig"><b>2.4</b><small>GHz ISM</small></div>
+          <div class="ldesc"><h3>THE MOST CROWDED SLIVER OF ALL</h3><p>Interference scenarios crop up all the time — and when throughput dies, nobody can say who was talking over whom. We need to know. AI can help.</p></div>
+        </div>
+      </div>
+      <p class="closer rev" style="--d:.55">THE SPECTRUM ISN'T GROWING. THE TRAFFIC IS.</p>
+    </div>
+  </section>
+
+  <!-- 03 · THE IDEA -->
+  <section class="slide" data-gain=".55" data-title="THE IDEA">
+    <div class="wrap">
+      <div class="grid2">
+        <div>
+          <p class="kick rev">03 — THE IDEA</p>
+          <h2 class="rev" style="--d:.1">A NETWORK THAT<br>NAMES THE <em>AIRWAVES</em>.</h2>
+          <p class="lede rev" style="--d:.2">The convolutional networks that classify tumors and SAR imagery can classify RF emissions too. We feed one time–frequency spectrograms of the spectrum around us; it answers, frame by frame: who is transmitting — and are two systems colliding?</p>
+          <div class="mini-panel rev" style="--d:.35">
+            <canvas id="mIdea"></canvas>
+            <div class="mini-cap"><span>WHAT THE NETWORK SEES</span><span>STFT · WLAN + BLE · 227×227</span></div>
+          </div>
+        </div>
+        <div class="pipe">
+          <div class="pstep rev" style="--d:.25"><b>01</b><div><h4>I/Q CAPTURE</h4><p>Complex baseband frames — synthetic waveforms or a live SDR.</p></div></div>
+          <div class="pstep rev" style="--d:.35"><b>02</b><div><h4>STFT → IMAGE</h4><p><code>pspectrum(·)</code> turns each frame into a time–frequency spectrogram.</p></div></div>
+          <div class="pstep rev" style="--d:.45"><b>03</b><div><h4>CNN BACKBONE</h4><p>Pretrained on the 5G/LTE spectrum-sensing example; early layers frozen.</p></div></div>
+          <div class="pstep rev" style="--d:.55"><b>04</b><div><h4>HEAD + CONFIDENCE</h4><p>Softmax over signal classes, plus a coexistence flag when two systems share the air.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · LIVE INSTRUMENT -->
+  <section class="slide s-demo" data-gain=".95" data-title="LIVE INSTRUMENT">
+    <div class="wrap">
+      <div class="grid2">
+        <div class="panelbox rev" style="--d:.15">
+          <p class="kick">04 — LIVE INSTRUMENT</p>
+          <h2 style="margin-top:14px">TOUCH THE<br><em>SPECTRUM</em>.</h2>
+          <p class="lede" style="margin-top:16px;font-size:15px">This waterfall is our synthetic RF front-end, running behind the entire deck. Flip the emissions on and off — the classifier panel answers frame by frame, exactly the loop Phase 3 will run on real hardware.</p>
+          <div class="sigs">
+            <button class="sig on" data-sig="wifi" aria-pressed="true"><span class="k">1</span><span class="nm">WLAN 802.11</span><span class="mt">20/40 MHz OFDM · bursty</span><i class="led"></i></button>
+            <button class="sig on" data-sig="ble" aria-pressed="true"><span class="k">2</span><span class="nm">BLUETOOTH LE</span><span class="mt">1 MHz GFSK · freq-hopping</span><i class="led"></i></button>
+            <button class="sig" data-sig="zig" aria-pressed="false"><span class="k">3</span><span class="nm">ZIGBEE 802.15.4</span><span class="mt">2 MHz OQPSK · always-on</span><i class="led"></i></button>
+            <button class="sig" data-sig="lte" aria-pressed="false"><span class="k">4</span><span class="nm">LTE / NR</span><span class="mt">wideband · licensed</span><i class="led"></i></button>
+          </div>
+          <p class="foot-hint">KEYS <b>1–4</b> TOGGLE EMISSIONS · SIMULATED FRONT-END, REAL INFERENCE LOOP</p>
+        </div>
+        <aside class="readout rev" style="--d:.3">
+          <div class="r-head"><span>CLASSIFIER OUTPUT</span><span id="rMode">ONLINE</span></div>
+          <div class="r-label">PREDICTION</div>
+          <div class="r-pred" id="rPred">—</div>
+          <div class="r-conf"><div class="bar"><i id="rBar"></i></div><b id="rConf">—</b></div>
+          <div class="r-classes" id="rClasses">
+            <div class="rc" data-k="wifi"><span>WLAN</span><div class="bar"><i></i></div><b>—</b></div>
+            <div class="rc" data-k="ble"><span>BLE</span><div class="bar"><i></i></div><b>—</b></div>
+            <div class="rc" data-k="zig"><span>802.15.4</span><div class="bar"><i></i></div><b>—</b></div>
+            <div class="rc" data-k="lte"><span>LTE·NR</span><div class="bar"><i></i></div><b>—</b></div>
+          </div>
+          <div class="r-co" id="rCo"><i></i><span>COEXISTENCE FLAG</span><b id="rCoV">—</b></div>
+          <div class="r-foot" id="rFoot">FRAME 0x0000 · — ms · SNR — dB</div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 · TARGET SCENARIOS -->
+  <section class="slide" data-gain=".42" data-title="TARGET SCENARIOS">
+    <div class="wrap">
+      <div class="head">
+        <p class="kick rev">05 — TARGET SCENARIOS</p>
+        <h2 class="rev" style="--d:.1">FOUR COLLISIONS<br>WORTH <em>STUDYING</em>.</h2>
+        <p class="lede rev" style="--d:.18;margin-top:14px">Each pair has a distinct time–frequency signature — and a real-world reason to collide. Hover a row to inspect what we'll teach the network to read.</p>
+      </div>
+      <div class="pairs rev" style="--d:.28">
+        <div class="prow"><b class="pn">A</b>
+          <div class="pt"><h4>WiFi ↔ Bluetooth</h4><p>Both live in 2.4 GHz ISM. 20 MHz OFDM bursts steamroll 1 MHz hops; adaptive frequency hopping fights back.</p></div>
+          <span class="pb">802.11 / BLE</span><canvas class="pcv"></canvas></div>
+        <div class="prow"><b class="pn">B</b>
+          <div class="pt"><h4>Radar ↔ 5G</h4><p>3.5 GHz mid-band: high-power pulse radar against NR — the dynamic spectrum sharing problem.</p></div>
+          <span class="pb">PULSE / NR</span><canvas class="pcv"></canvas></div>
+        <div class="prow"><b class="pn">C</b>
+          <div class="pt"><h4>ZigBee ↔ Bluetooth</h4><p>IoT mesh versus hopping stars in the same ISM sliver — coexistence for smart buildings.</p></div>
+          <span class="pb">802.15.4 / BLE</span><canvas class="pcv"></canvas></div>
+        <div class="prow"><b class="pn">D</b>
+          <div class="pt"><h4>ZigBee ↔ WiFi</h4><p>A 2 MHz OQPSK carrier buried under 20 MHz WLAN bursts — the classic smart-home collision.</p></div>
+          <span class="pb">802.15.4 / 802.11</span><canvas class="pcv"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 · PHASE 1 -->
+  <section class="slide" data-gain=".5" data-title="PHASE 1 · DATA">
+    <div class="wrap">
+      <div class="head">
+        <p class="kick rev">06 — PHASE 1 · SYNTHETIC DATA</p>
+        <h2 class="rev" style="--d:.1">SYNTHESIZE THE <em>TRUTH</em>.</h2>
+      </div>
+      <div class="grid2 g-start">
+        <div class="pipe">
+          <div class="pstep rev" style="--d:.2"><b>01</b><div><h4>SYNTHESIZE</h4><p>Generate clean reference waveforms per standard with the Wireless Waveform Generator App.</p><p><code>wlanWaveformGenerator</code> <code>bluetoothWaveformGenerator</code> <code>lteWaveformGenerator</code></p></div></div>
+          <div class="pstep rev" style="--d:.3"><b>02</b><div><h4>COMBINE</h4><p>Frequency-translate each signal so channels touch or overlap, then merge into one shared capture.</p><p><code>comm.PhaseFrequencyOffset</code> <code>Multiband Combiner</code></p></div></div>
+          <div class="pstep rev" style="--d:.4"><b>03</b><div><h4>DEGRADE</h4><p>Add every impairment the real air will add — the network must survive them.</p><p><code>comm.AWGNChannel</code> <code>comm.RayleighChannel</code> <code>CFO</code> <code>phase noise</code></p></div></div>
+          <div class="pstep rev" style="--d:.5"><b>04</b><div><h4>TRANSFORM &amp; LABEL</h4><p>STFT each frame into a 227×227 time–frequency image; label the set by signal content.</p><p><code>pspectrum</code> <code>SNR sweep 0–30 dB</code></p></div></div>
+        </div>
+        <div class="spec rev" style="--d:.35">
+          <h5>DATASET SPEC</h5>
+          <div class="srow"><b>CLASSES</b><span>4 → 6+ (extendable)</span></div>
+          <div class="srow"><b>FRAMES / CLASS</b><span>≈ 3,000</span></div>
+          <div class="srow"><b>SNR SWEEP</b><span>0 – 30 dB</span></div>
+          <div class="srow"><b>IMPAIRMENTS</b><span>AWGN · RAYLEIGH · CFO · PH.N.</span></div>
+          <div class="srow"><b>FFT FRAME</b><span>227 × 227 px</span></div>
+          <div class="srow"><b>SOURCE</b><span>SYNTHETIC — MATLAB</span></div>
+          <canvas id="mP1"></canvas>
+          <div class="mini-cap"><span>SAMPLE FRAME</span><span>WLAN + 802.15.4</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 · PHASE 2 -->
+  <section class="slide" data-gain=".45" data-title="PHASE 2 · LEARNING">
+    <div class="wrap">
+      <div class="head">
+        <p class="kick rev">07 — PHASE 2 · TRANSFER LEARNING</p>
+        <h2 class="rev" style="--d:.1">TRANSFER, DON'T <em>RETRAIN</em>.</h2>
+      </div>
+      <div class="grid2 g-start">
+        <div class="pipe">
+          <div class="pstep rev" style="--d:.2"><b>01</b><div><h4>START PRETRAINED</h4><p>Load the CNN from MATLAB's <i>Spectrum Sensing with Deep Learning</i> example — it already reads 5G/LTE spectrograms.</p></div></div>
+          <div class="pstep rev" style="--d:.28"><b>02</b><div><h4>FREEZE THE BACKBONE</h4><p>Early convolutional blocks keep their weights: generic spectral edge &amp; texture detectors transfer as-is.</p></div></div>
+          <div class="pstep rev" style="--d:.36"><b>03</b><div><h4>SWAP THE HEAD</h4><p>New fully-connected + softmax layers for our classes — wired visually in Deep Network Designer.</p></div></div>
+          <div class="pstep rev" style="--d:.44"><b>04</b><div><h4>TRAIN GENTLY</h4><p>Adam solver, initial learn rate <code>1e-4</code> — small steps protect the pretrained features.</p></div></div>
+          <div class="pstep rev" style="--d:.52"><b>05</b><div><h4>JUDGE HONESTLY</h4><p>80 / 10 / 10 split — train, validation, hold-out. Read the confusion matrix, not the loss curve.</p></div></div>
+        </div>
+        <div class="rev" style="--d:.3">
+          <div class="cm" id="cm">
+            <b></b><b>WLAN</b><b>BLE</b><b>W+B</b><b>NOISE</b>
+            <b>WLAN</b><i class="d" style="--a:.95;--d:.10">98</i><i class="x" style="--d:.14">1</i><i class="x" style="--d:.18">1</i><i class="z" style="--d:.22">0</i>
+            <b>BLE</b><i class="x" style="--d:.26">1</i><i class="d" style="--a:.92;--d:.30">97</i><i class="x" style="--d:.34">2</i><i class="z" style="--d:.38">0</i>
+            <b>W+B</b><i class="x" style="--d:.42">2</i><i class="x" style="--d:.46">3</i><i class="d" style="--a:.88;--d:.50">94</i><i class="x" style="--d:.54">1</i>
+            <b>NOISE</b><i class="x" style="--d:.58">1</i><i class="z" style="--d:.62">0</i><i class="z" style="--d:.66">0</i><i class="d" style="--a:.97;--d:.70">99</i>
+          </div>
+          <div class="cm-foot"><b>97.0%</b>FRAME ACCURACY — SYNTHETIC HOLD-OUT (TARGET)
+            <span>rows = truth · cols = prediction · BLE hops occasionally read as short WLAN bursts — the exact confusion OTA testing will attack.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 · PHASE 3 -->
+  <section class="slide" data-gain=".5" data-title="PHASE 3 · OTA">
+    <div class="wrap">
+      <div class="head">
+        <p class="kick rev">08 — PHASE 3 · OVER THE AIR</p>
+        <h2 class="rev" style="--d:.1">PUT IT ON THE <em>AIR</em>.</h2>
+      </div>
+      <div class="chain rev" style="--d:.2">
+        <div class="cbox"><b>MATLAB</b><span>TX WAVEFORM</span></div>
+        <div class="carr"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 3l5 5-5 5"/></svg></div>
+        <div class="cbox"><b>SDR</b><span>ADALM-PLUTO · TX</span></div>
+        <div class="air"><span>OVER-THE-AIR · 2.4 GHz ISM</span><i></i></div>
+        <div class="cbox"><b>SDR</b><span>USRP B210 · RX</span></div>
+        <div class="carr"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 3l5 5-5 5"/></svg></div>
+        <div class="cbox"><b>STFT</b><span>FRAME BUFFER</span></div>
+        <div class="carr"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 3l5 5-5 5"/></svg></div>
+        <div class="cbox hot"><b>classify(net)</b><span>LIVE LABEL</span></div>
+      </div>
+      <div class="grid2 g-start p3grid">
+        <div class="rev" style="--d:.35">
+          <h4 style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.24em;color:var(--mut);font-weight:500;margin-bottom:14px">HARDWARE — SUPPORTED RADIOS</h4>
+          <div class="chips">
+            <span class="chip hot">ADALM-PLUTO</span><span class="chip">USRP B200 / B210</span><span class="chip">USRP N3xx</span>
+            <span class="chip">USRP X3xx / X4xx</span><span class="chip hot">2.4 / 3.5 / 5.8 GHz</span>
+          </div>
+          <p class="sub">OPTION A — TRANSMIT OUR WAVEFORMS ON A SECOND SDR, LOOPBACK STYLE.<br>
+          OPTION B — SKIP THE TX: CAPTURE AMBIENT TOWERS AND ROUTERS DIRECTLY.</p>
+        </div>
+        <pre class="code rev" style="--d:.45"><span class="c">% real-time classification loop (Phase 3)</span>
+while true
+    iq  = rx(pluto);             <span class="c">% capture I/Q frame</span>
+    S   = spectrogram(iq, ...);  <span class="c">% STFT → time-freq image</span>
+    lbl = classify(net, S);      <span class="c">% single-frame inference</span>
+    log(lbl, iq, S);             <span class="c">% keep the evidence</span>
+end</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 · ROADMAP -->
+  <section class="slide" data-gain=".48" data-title="BEYOND BASELINE">
+    <div class="wrap">
+      <div class="head">
+        <p class="kick rev">09 — BEYOND THE BASELINE</p>
+        <h2 class="rev" style="--d:.1">WHERE WE PUSH<br><em>FURTHER</em>.</h2>
+      </div>
+      <div class="road">
+        <div class="rrow rev" style="--d:.18"><b>01</b><div><h4>CO-CHANNEL, OVERLAPPING</h4><p>Train and test on signals that share the same spectrum — the hard, realistic case.</p></div></div>
+        <div class="rrow rev" style="--d:.24"><b>02</b><div><h4>PARTIAL-BAND FRAGMENTS</h4><p>Filter an emission down to a sliver of bandwidth; classify from fragments alone.</p></div></div>
+        <div class="rrow rev" style="--d:.30"><b>03</b><div><h4>SMALLER &amp; FASTER</h4><p>Prune and quantize the network — hold the accuracy, cut the latency and memory.</p></div></div>
+        <div class="rrow rev" style="--d:.36"><b>04</b><div><h4>REDESIGN THE BACKBONE</h4><p>Deep Network Designer: modify the architecture and try to beat the baseline classifier.</p></div></div>
+        <div class="rrow rev" style="--d:.42"><b>05</b><div><h4>PUBLIC RF DATA</h4><p>Cross-validate on the Wireless Intelligence public dataset — beyond our own generator.</p></div></div>
+        <div class="rrow rev" style="--d:.48"><b>06</b><div><h4>DEPLOY TO SILICON</h4><p>C/C++ codegen onto embedded processors; Deep Learning HDL Toolbox onto an FPGA.</p></div></div>
+      </div>
+      <p class="closer rev" style="--d:.58">OR BETTER — INVENT YOUR OWN.</p>
+    </div>
+  </section>
+
+  <!-- 10 · CLOSING -->
+  <section class="slide" data-gain=".85" data-title="IMPACT">
+    <div class="wrap">
+      <p class="kick rev">10 — IMPACT</p>
+      <h2 class="rev" style="--d:.1;margin-top:14px">MAKE THE AIR<br><em>LEGIBLE</em>.</h2>
+      <p class="lede rev" style="--d:.22">Interference is an invisible tax on every wireless system — lost throughput, drained batteries, unexplained failures. A classifier that names the signals around it, live and on affordable hardware, turns a crowded spectrum from a mystery into a measurable, manageable space.</p>
+      <div class="chips chips-lg rev" style="--d:.36">
+        <span class="chip hot">5G</span><span class="chip">ARTIFICIAL INTELLIGENCE</span><span class="chip">DEEP LEARNING</span><span class="chip">NEURAL NETWORKS</span>
+        <span class="chip">IMAGE PROCESSING</span><span class="chip">MACHINE LEARNING</span><span class="chip">SOFTWARE-DEFINED RADIO</span><span class="chip">WIRELESS</span><span class="chip">MATLAB</span>
+      </div>
+      <div class="thanks rev" style="--d:.5">
+        <span>THANK YOU — <b>QUESTIONS WELCOME</b></span>
+        <span>SPECTRASENSE · MATLAB · DEEP LEARNING · COMMUNICATIONS TOOLBOX · SDR SUPPORT</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="hud hud-bot">
+  <div class="counter"><b id="cnum">01</b> / 10 <span id="ctitle">TITLE</span></div>
+  <div class="hint" id="hudHint">ARROW KEYS · SCROLL · SWIPE</div>
+  <div class="nav">
+    <button id="prev" aria-label="previous slide"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3l-5 5 5 5"/></svg></button>
+    <button id="next" aria-label="next slide"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5.5 3l5 5-5 5"/></svg></button>
+  </div>
+</footer>
+
+<script>
+'use strict';
+const $=(s,el=document)=>el.querySelector(s);
+const $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ============ hot (blackbody) colormap — the deck's whole color story ============ */
+function hot(v){
+  v=clamp(v,0,1);
+  const r=clamp(2.6*v,0,1), g=clamp(2.6*v-1.2,0,1), b=clamp(3*v-2.4,0,1);
+  return 'rgb('+((r*255)|0)+','+((g*255)|0)+','+((b*255)|0)+')';
+}
+
+/* ============ signal physics: one shared model for the big waterfall & the minis ============ */
+const DEF={
+  wifi:{cf:.24,onB:0,rest:20+((Math.random()*40)|0),wide:false,justStarted:false},
+  ble:{f:.7,hopLen:40,sinceHop:0,burst:0,hopCount:0,hopped:false},
+  zig:{cf:.62,cfT:.62,lastChange:0,changed:false},
+  radar:{c:.5,pulse:0,rest:20+((Math.random()*50)|0)},
+  lte:{}
+};
+function mkSig(t,opt){ return Object.assign({type:t,on:true},DEF[t],opt||{}); }
+function advance(s,T){
+  switch(s.type){
+    case 'wifi':
+      if(s.onB>0){ if(--s.onB===0) s.rest=(12+Math.random()*70)|0; }
+      else if(--s.rest<=0){
+        s.onB=10+((Math.random()*24)|0);
+        s.wide=Math.random()<0.2; if(s.wide) s.onB+=10;
+        if(Math.random()<0.35) s.cf=[0.12,0.37,0.62][(Math.random()*3)|0];
+        s.justStarted=true;
+      } break;
+    case 'ble':
+      if(++s.sinceHop>s.hopLen){
+        s.sinceHop=0; s.hopLen=(22+Math.random()*40)|0;
+        s.f=0.02+Math.random()*0.9; s.burst=(2+Math.random()*5)|0;
+        s.hopCount++; s.hopped=true;
+      }
+      if(s.burst>0)s.burst--; break;
+    case 'zig':
+      if(T-s.lastChange>600 && Math.random()<0.008){
+        s.lastChange=T; s.cfT=[0.05,0.25,0.5,0.75][(Math.random()*4)|0]; s.changed=true;
+      }
+      s.cf+=(s.cfT-s.cf)*0.08; break;
+    case 'radar':
+      if(s.pulse>0)s.pulse--;
+      else if(--s.rest<=0){ s.pulse=2; s.rest=(60+Math.random()*70)|0; } break;
+  }
+}
+function contribute(s,p,N,T){
+  switch(s.type){
+    case 'wifi': if(s.onB>0){ const half=s.wide?0.20:0.105;
+      for(let i=0;i<N;i++){ const d=Math.abs(i/N-s.cf); if(d<half){ const t=1-d/half; p[i]+=(0.5+0.3*Math.random())*(0.3+0.7*t); } } } break;
+    case 'ble': if(s.burst>0){ for(let i=0;i<N;i++){ if(Math.abs(i/N-s.f)<0.013) p[i]+=0.75+0.2*Math.random(); } } break;
+    case 'zig': for(let i=0;i<N;i++){ const d=Math.abs(i/N-s.cf);
+      if(d<0.015) p[i]+=0.36+0.1*Math.sin(T*0.3+i*0.7)+0.04*Math.random(); } break;
+    case 'radar': if(s.pulse>0){ for(let i=0;i<N;i++){ if(Math.abs(i/N-s.c)<0.3) p[i]+=0.85+0.15*Math.random(); } } break;
+    case 'lte': for(let i=0;i<N;i++){ const f=i/N;
+      if(f>0.55&&f<0.97){ const e=Math.min(1,(f-0.55)/0.03)*Math.min(1,(0.97-f)/0.03);
+        p[i]+=(0.5+0.05*Math.sin(T*0.02+i*0.3)+0.05*Math.random())*e; } } break;
+  }
+}
+function fillNoise(p,N){ for(let i=0;i<N;i++) p[i]=0.045+Math.pow(Math.random(),3)*0.10; }
+
+/* ============ the global waterfall engine ============ */
+const wf=$('#wf'), wctx=wf.getContext('2d');
+const ROW=2; let W=0,H=0,NB=200,BW=4,T=0,gain;
+const state={wifi:true,ble:true,zig:false,lte:false};
+const eng={wifi:mkSig('wifi'),ble:mkSig('ble'),zig:mkSig('zig'),lte:mkSig('lte')};
+const nbuf=new Float32Array(256);
+
+function wfLabel(txt,x){
+  wctx.font='10px "IBM Plex Mono",monospace'; wctx.textBaseline='top';
+  wctx.fillStyle='rgba(244,237,224,.68)';
+  wctx.fillText(txt, clamp(x-26,4,Math.max(4,W-64)), ROW+1);
+}
+function engStep(){
+  T++;
+  for(const k in eng){ eng[k].on=state[k]; advance(eng[k],T); }
+  const w=eng.wifi; if(w.justStarted){ w.justStarted=false; if(state.wifi) wfLabel(w.wide?'WLAN 40M':'WLAN 20M', w.cf*W); }
+  const b=eng.ble;  if(b.hopped){ b.hopped=false; if(state.ble && b.hopCount%7===0) wfLabel('BLE', b.f*W); }
+  const z=eng.zig;  if(z.changed){ z.changed=false; if(state.zig) wfLabel('802.15.4', z.cfT*W); }
+  const l=eng.lte;  if(state.lte && !l.wasOn) wfLabel('LTE / NR', .76*W); l.wasOn=state.lte;
+}
+function engPaint(){
+  wctx.drawImage(wf,0,ROW);
+  fillNoise(nbuf,NB);
+  for(const k in eng) if(eng[k].on) contribute(eng[k],nbuf,NB,T);
+  for(let i=0;i<NB;i++){
+    nbuf[i]*=gain[i];
+    wctx.fillStyle=hot(Math.pow(clamp(nbuf[i],0,1),1.15));
+    wctx.fillRect(i*BW,0,BW+1,ROW);
+  }
+  if(T%60===0){ wctx.fillStyle='rgba(255,176,59,.09)'; wctx.fillRect(0,0,W,ROW); }
+}
+function sizeWF(){
+  W=wf.width=innerWidth; H=wf.height=innerHeight;
+  NB=clamp(Math.round(W/7),96,240); BW=W/NB;
+  gain=new Float32Array(NB); for(let i=0;i<NB;i++) gain[i]=0.85+Math.random()*0.3;
+  wctx.imageSmoothingEnabled=false;
+  wctx.fillStyle='#0b0908'; wctx.fillRect(0,0,W,H);
+  const n=Math.ceil(H/ROW)+30;                 // pre-fill the screen so it "boots" already running
+  for(let i=0;i<n;i++){ engStep(); engPaint(); }
+}
+
+/* ============ mini spectrograms (idea thumb, dataset sample, pair previews) ============ */
+class Mini{
+  constructor(cv,defs,slide){
+    this.cv=cv; this.ctx=cv.getContext('2d'); this.slide=slide;
+    this.sigs=defs.map(d=>Array.isArray(d)?mkSig(d[0],d[1]):mkSig(d));
+    this.N=120; this.rowH=2; this.T=0; this.buf=new Float32Array(128); this.W=0;
+  }
+  size(){
+    const dpr=Math.min(2,devicePixelRatio||1);
+    this.W=this.cv.width=Math.max(10,Math.round(this.cv.clientWidth*dpr));
+    this.H=this.cv.height=Math.max(10,Math.round(this.cv.clientHeight*dpr));
+    this.BW=this.W/this.N; this.ctx.imageSmoothingEnabled=false;
+    this.ctx.fillStyle='#0d0a08'; this.ctx.fillRect(0,0,this.W,this.H);
+  }
+  step(){ this.T++; this.sigs.forEach(s=>advance(s,this.T)); }
+  paint(){
+    this.ctx.drawImage(this.cv,0,this.rowH);
+    fillNoise(this.buf,this.N);
+    this.sigs.forEach(s=>contribute(s,this.buf,this.N,this.T));
+    for(let i=0;i<this.N;i++){
+      this.ctx.fillStyle=hot(Math.pow(clamp(this.buf[i],0,1),1.15));
+      this.ctx.fillRect(i*this.BW,0,this.BW+1,this.rowH);
+    }
+  }
+}
+const minis=[
+  new Mini($('#mIdea'),[['wifi'],['ble']],2),
+  new Mini($('#mP1'),[['zig'],['wifi']],5),
+  new Mini($$('.pcv')[0],[['wifi'],['ble']],4),
+  new Mini($$('.pcv')[1],[['radar',{c:.28}],['lte']],4),
+  new Mini($$('.pcv')[2],[['zig'],['ble']],4),
+  new Mini($$('.pcv')[3],[['zig'],['wifi']],4)
+];
+let minisOn=[];
+
+/* ============ deck navigation ============ */
+const slides=$$('.slide'), titles=slides.map(s=>s.dataset.title);
+const pbar=$('#pbar'), cnum=$('#cnum'), ctitle=$('#ctitle'), hudHint=$('#hudHint'), sweep=$('#sweep');
+let cur=0, demoActive=false, pHover=false, pAuto=0, pIdx=0, lastTick=0;
+const HINT0='ARROW KEYS · SCROLL · SWIPE', HINT1='KEYS 1 – 4 TOGGLE EMISSIONS';
+
+function go(n,force){
+  n=clamp(n,0,slides.length-1);
+  if(n===cur && !force) return;
+  slides[cur].classList.remove('active');
+  cur=n; slides[cur].classList.add('active');
+  cnum.textContent=String(cur+1).padStart(2,'0');
+  ctitle.textContent=titles[cur];
+  pbar.style.width=((cur+1)/slides.length*100)+'%';
+  wf.style.opacity=slides[cur].dataset.gain||'0.55';
+  hudHint.textContent=(cur===3)?HINT1:HINT0;
+  demoActive=(cur===3);
+  sweep.classList.remove('run'); void sweep.offsetWidth; sweep.classList.add('run');
+  /* per-slide hooks */
+  minisOn=minis.filter(m=>m.slide===cur);
+  minisOn.forEach(m=>{ m.size(); for(let i=0;i<30;i++){ m.step(); m.paint(); } });
+  if(cur===1) runCounters();
+  if(cur===4){ setP(0); pAuto=0; }
+  if(cur===6){ const cm=$('#cm'); cm.classList.remove('play'); void cm.offsetWidth; cm.classList.add('play'); }
+  if(cur===3 && curPred) render();
+}
+ $('#prev').addEventListener('click',()=>go(cur-1));
+ $('#next').addEventListener('click',()=>go(cur+1));
+addEventListener('keydown',e=>{
+  if(e.key===' ' && e.target.tagName==='BUTTON') return;   // let toggles keep space
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); go(cur+1); }
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); go(cur-1); }
+  else if(e.key==='Home'){ go(0); } else if(e.key==='End'){ go(slides.length-1); }
+  else if(demoActive && !e.metaKey && !e.ctrlKey && '1234'.includes(e.key)) toggleSig(['wifi','ble','zig','lte'][+e.key-1]);
+});
+/* wheel: normalize delta units (Firefox reports lines, not pixels), and
+   never hijack the wheel while a slide still has inner overflow to scroll */
+let wAcc=0,wLock=0;
+addEventListener('wheel',e=>{
+  const now=Date.now(); if(now<wLock) return;
+  const d=e.deltaMode===1 ? e.deltaY*33 : e.deltaMode===2 ? e.deltaY*innerHeight : e.deltaY;
+  const sl=slides[cur];
+  if(sl.scrollHeight>sl.clientHeight+4){
+    const atTop=sl.scrollTop<=0, atBot=sl.scrollTop+sl.clientHeight>=sl.scrollHeight-4;
+    if((d<0&&!atTop)||(d>0&&!atBot)) return;
+  }
+  wAcc+=d;
+  if(Math.abs(wAcc)>60){ go(cur+(wAcc>0?1:-1)); wLock=now+700; wAcc=0; }
+},{passive:true});
+let ty=null;
+addEventListener('touchstart',e=>{ ty=e.touches[0].clientY; },{passive:true});
+addEventListener('touchend',e=>{
+  if(ty==null) return; const d=ty-e.changedTouches[0].clientY;
+  if(Math.abs(d)>60) go(cur+(d>0?1:-1)); ty=null;
+},{passive:true});
+
+/* ============ counters (problem slide) ============ */
+function runCounters(){
+  $$('[data-count]',slides[1]).forEach(el=>{
+    const t=+el.dataset.count, suf=el.dataset.suffix||'';
+    if(el._raf) cancelAnimationFrame(el._raf);
+    const t0=performance.now(), dur=1400;
+    const f=now=>{
+      const k=clamp((now-t0)/dur,0,1), e=1-Math.pow(1-k,3);
+      el.textContent=Math.round(t*e)+suf;
+      if(k<1) el._raf=requestAnimationFrame(f);
+    };
+    el._raf=requestAnimationFrame(f);
+  });
+}
+
+/* ============ pair rows: hover spotlight + auto-cycle ============ */
+const prows=$$('.prow');
+function setP(i){ prows.forEach((r,j)=>r.classList.toggle('on',i===j)); pIdx=i; }
+prows.forEach((r,i)=>{
+  r.addEventListener('mouseenter',()=>{ pHover=true; setP(i); });
+  r.addEventListener('mouseleave',()=>{ pHover=false; });
+});
+
+/* ============ the mock classifier ============ */
+const SHORT={wifi:'WLAN',ble:'BLE',zig:'802.15.4',lte:'LTE'};
+const SOLO={
+  wifi:{label:'WLAN 802.11 — 20/40 MHz OFDM',conf:97.8},
+  ble:{label:'BLUETOOTH LE — AFH HOPPING',conf:96.4},
+  zig:{label:'IEEE 802.15.4 (ZIGBEE) — OQPSK',conf:96.1},
+  lte:{label:'LTE / NR — WIDEBAND CHANNEL',conf:97.2}
+};
+const PAIRCONF={'ble,wifi':93.4,'wifi,zig':92.8,'wifi,lte':90.6,'ble,zig':93.1,'ble,lte':91.2,'lte,zig':91.5};
+let curPred=null, frame=0x1A2B, inferTO=null;
+function predict(act){
+  const probs={wifi:.03,ble:.02,zig:.02,lte:.02}, n=act.length;
+  if(n===0) return {label:'NOISE FLOOR ONLY',conf:99.1,co:false,probs};
+  act.forEach(k=>probs[k]= n===1?.94 : n===2?.57 : .43);
+  if(n===1) return {label:SOLO[act[0]].label,conf:SOLO[act[0]].conf,co:false,probs};
+  const names=act.map(k=>SHORT[k]).join(' + ');
+  if(n===2){ const c=PAIRCONF[act.slice().sort().join(',')]||92;
+    return {label:'INTERFERENCE — '+names,conf:c,co:true,probs}; }
+  if(n===3) return {label:'MULTI-NET COEXISTENCE — '+names,conf:86.9,co:true,probs};
+  return {label:'SPECTRUM SATURATION — 4 SYSTEMS',conf:82.6,co:true,probs};
+}
+function render(){
+  $('#rPred').textContent=curPred.label;
+  const c=clamp(curPred.conf+(Math.random()-.5)*0.7,80,99.9);
+  $('#rConf').textContent=c.toFixed(1)+'%';
+  $('#rBar').style.width=c+'%';
+  $$('#rClasses .rc').forEach(row=>{
+    const k=row.dataset.k;
+    const p=clamp(curPred.probs[k]+(Math.random()-.5)*0.05,0.01,0.99);
+    row.querySelector('i').style.width=(p*100)+'%';
+    row.querySelector('b').textContent=Math.round(p*100)+'%';
+  });
+  $('#rCoV').textContent=curPred.co?'ACTIVE':'—';
+  $('#rCo').classList.toggle('on',curPred.co);
+  frame=(frame+1+((Math.random()*3)|0))&0xFFFF;
+  const act=Object.keys(state).filter(k=>state[k]).length;
+  $('#rFoot').textContent='FRAME 0x'+frame.toString(16).toUpperCase().padStart(4,'0')
+    +' · '+(3.4+Math.random()*2.4).toFixed(1)+' ms · SNR '+(9+act*3.5+Math.random()*3).toFixed(1)+' dB';
+  $('#rMode').textContent='ONLINE';
+}
+function applyPrediction(){
+  curPred=predict(Object.keys(state).filter(k=>state[k]));
+  render();
+}
+function toggleSig(k){
+  state[k]=!state[k];
+  const btn=$('.sig[data-sig="'+k+'"]');
+  btn.classList.toggle('on',state[k]);
+  btn.setAttribute('aria-pressed',state[k]);
+  $('#rMode').textContent='INFERRING…';
+  clearTimeout(inferTO); inferTO=setTimeout(applyPrediction,420);
+}
+ $$('.sig').forEach(b=>b.addEventListener('click',()=>toggleSig(b.dataset.sig)));
+
+/* ============ main loop ============ */
+let fc=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  fc++;
+  const tick=RM ? (fc%3===0) : true;
+  if(tick){ engStep(); engPaint(); }
+  if(minisOn.length && fc%3===0) minisOn.forEach(m=>{ m.step(); m.paint(); });
+  if(cur===4 && !pHover){ pAuto++; if(pAuto>150){ pAuto=0; setP((pIdx+1)%prows.length); } }
+  if(demoActive && curPred && ts-lastTick>900){ lastTick=ts; render(); }
+}
+
+/* ============ boot ============ */
+let rTO;
+addEventListener('resize',()=>{ clearTimeout(rTO); rTO=setTimeout(()=>{ sizeWF(); minisOn.forEach(m=>m.size()); },150); });
+sizeWF();
+go(0,true);                 // single init path — same code as every navigation
+applyPrediction();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
